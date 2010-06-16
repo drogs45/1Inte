@@ -76,9 +76,9 @@ generar cc cn (x@(m,pi,c):xs) = x:(generar cc newcn (xs ++ lista ))
  - La cantidad de hijos de una matriz son s * cantidad de filas.
  -}
 expandir :: ([([Integer],Integer)],Integer,Integer) -> Integer -> Integer -> Integer ->(Integer,[([([Integer],Integer)],Integer,Integer)]) 
-expandir m cc cn ccam = (e, concat l)
+expandir m@(_,pisos,_) cc cn ccam = (e, concat l)
   where
-    (e,l) = mapAccumL (cambio m) cn [0..cc-2]
+    (e,l) = mapAccumL (cambio m) cn [pisos..cc-2]
 {--  
   | ccam == (cc -1) = []
   | otherwise       = (cambio m cn ccam) ++ (expandir m cc (cn+cc) (ccam+1))
@@ -141,5 +141,5 @@ genFila y (fila,_) = (genFilaN 0 y fila , 1)
     genFilaN _ _ [] = []
     genFilaN x y (e0:e1:es)
       | x == y = e1:e0:es
-      | otherwise = e1:genFilaN (x+1) y (e1:es)
+      | otherwise = e0:genFilaN (x+1) y (e1:es)
 
