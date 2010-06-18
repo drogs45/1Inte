@@ -18,37 +18,51 @@ import Data.Maybe
  - de esta manera el generar tiene q esperar expandir TODOS los hijos del nodo actual para poder seguir.
  -}
 bfs :: Integer -> Integer -> [(Integer,String)] -> [([Integer],Integer)] -> ([([Integer],Integer)],Integer,Integer)
-bfs cc cv c m = head $ filter (fCondorcet cc cv) $ generar 0 2 [(m,0,1)]
+bfs cc cv c m = head $ filter (\(s,_,_) -> fCondorcet cc cv s) $ generar cc 1 [(m,0,1)]
 
 {-|
  - 
  - tripleta: matriz, piso, numero de nodo.
  -}
-fCondorcet ::  Integer -> Integer -> ([([Integer],Integer)],Integer,Integer) -> Bool
-fCondorcet cc cv (m,_,_) = isJust $ find (\(i,w,z) -> i > cv `div`2) $ fst $ mapAccumL (cont cc) [] m
+fCondorcet ::  Integer -> Integer -> [([Integer],Integer)] -> Bool
+fCondorcet cc cv m = foldl (\x y -> x || (f cv y)) False $ groupBy verifElem $ sort $ fst $ mapAccumL trans [] m
 
-{-|Funcion que recibe
- - cp = cantidad de personas q apoyan esa preferencia.
- - a = acumulado de tuplas de la cantidad de personas q votaron por un candidato.
+
+verifElem :: (Integer,Integer,Integer) -> (Integer,Integer,Integer) -> Bool
+verifElem (a,_,_) (b,_,_) = a ==b
+{-|Funcion que verifica que todos las sumas de un las tuplas sean > n `div` 2
  -}
-cont :: Integer-> [(Integer,Integer,Integer)]  -> ([Integer],Integer) -> ([(Integer,Integer,Integer)],())
-cont cc a (fila,cp) =  (aumenta a $ genTuplas cp fila [],())
-  where
-    genTuplas :: Integer -> [Integer] -> [(Integer,Integer,Integer)] -> [(Integer,Integer,Integer)]
-    genTuplas cp (x:xs) a
-      | xs == [] = a
-      | otherwise = genTuplas cp xs (zip3 (repeat cp) (repeat x) (xs))++a
-    aumenta :: [(Integer,Integer,Integer)] -> [(Integer,Integer,Integer)] -> [(Integer,Integer,Integer)]
-    aumenta a l
-      | l == [] = a
-      | otherwise = aumenta (r a (head l)) (tail l)
-        where
-          r :: [(Integer,Integer,Integer)] -> (Integer,Integer,Integer) -> [(Integer,Integer,Integer)]
-          r [] x = [x]
-          r (x@(y,t,w):xs) (p,a,w1)
-            | t == a  && w == w1= (y+p,a,w):xs
-            | otherwise = x: (r xs (p,a,w1))
+f ::  Integer -> [(Integer,Integer,Integer)] -> Bool
+f _ [] = True
+f p ((a,b,c):xs)
+  | c > p `div` 2 = f p xs
+  | otherwise = False
 
+
+trans :: [(Integer,Integer,Integer)] -> ([Integer],Integer) -> ([(Integer,Integer,Integer)],())
+trans  a (l,p)= (add l p a,())
+{-|Genera todas las tripletas de una columna completa.
+ - primero: Columna.
+ - segundo: peso de la columna.
+ - tercero: lista de tripletas acumuladas.
+ -}
+add :: [Integer] -> Integer -> [(Integer,Integer,Integer)] -> [(Integer,Integer,Integer)]
+add [y] p a = a
+add (x:y:xs) p a = add (y:xs) p (fst $ mapAccumL (fnd x p) a (y:xs))
+{-|Funcion que recibe un numero (x), una lista de numeros (ls) y el peso (p)y la lista de tripletas q se a acumulado,
+ -  y lo que hace es genera todas las tuplas de x con cada uno de lso numeros de la lista ls con el peso p.
+ -  Si la tupla ya se encuentra el suma el peso (p) al peso anterior.
+ -  x = primer elemento de la tripleta.
+ -  ls = lista de segundos elementos de las tripletas.
+ -  p = peso.
+ -}
+fnd :: Integer -> Integer -> [(Integer,Integer,Integer)] -> Integer -> ([(Integer,Integer,Integer)],())
+fnd x p [] y = ([(x,y,p)],())
+fnd x p (l@(x0,y0,p0):xs) y
+  | x == x0 && y == y0 = ((x0,y0,m):xs,())
+  | otherwise = (l : (fst $ fnd x p xs y) ,())
+  where
+    !m = p+p0
 
 {-|
  - cc = cantidad de candidatos.
@@ -76,9 +90,12 @@ generar cc cn (x@(m,pi,c):xs) = x:(generar cc newcn (xs ++ lista ))
  - La cantidad de hijos de una matriz son s * cantidad de filas.
  -}
 expandir :: ([([Integer],Integer)],Integer,Integer) -> Integer -> Integer -> Integer ->(Integer,[([([Integer],Integer)],Integer,Integer)]) 
-expandir m@(_,pisos,_) cc cn ccam = (e, concat l)
+expandir m@(s,0,_) cc cn ccam =  (e,concat l)
   where
-    (e,l) = mapAccumL (cambio m) cn [pisos..cc-2]
+    (e,l) = mapAccumL (cambio m s) cn [0..cc-2]
+expandir m@(r,pisos,c) cc cn ccam = (f, concat d)
+  where
+    (f,d) = mapAccumL (cambio m $ drop (fromIntegral pisos) r ) cn [0..cc-2]
 {--  
   | ccam == (cc -1) = []
   | otherwise       = (cambio m cn ccam) ++ (expandir m cc (cn+cc) (ccam+1))
@@ -86,12 +103,13 @@ expandir m@(_,pisos,_) cc cn ccam = (e, concat l)
 
 {-|Funcion cambia el elemento que le dice ccam por el siguente en todas las filas,
  - produciendo asi una lista de matrices.
- - m = matriz
+ - m = matriz.
+ - l = lista de filas a las que se le va a aplicar el cambio,  ya que hay filas que estan fijas xq si las modifico genero un padre de el.
  - ccam = indice del elemento a realizar el cambio.
  - cn = contador de nodos.
  -}
-cambio :: ([([Integer],Integer)],Integer,Integer) -> Integer -> Integer -> (Integer,[([([Integer],Integer)],Integer,Integer)])
-cambio (m,pisos,_) cn ccam = mapAccumL (genMatriz m ccam pisos) cn m
+cambio ::([([Integer],Integer)],Integer,Integer) -> [([Integer],Integer)] -> Integer -> Integer -> (Integer,[([([Integer],Integer)],Integer,Integer)])
+cambio (m,pisos,_) l cn ccam = mapAccumL (genMatriz m ccam pisos) cn l
 
 {-|
  - m
@@ -117,7 +135,7 @@ modifVotante :: [([Integer],Integer)] -> ([Integer],Integer) -> [([Integer],Inte
 modifVotante [] _ = []
 modifVotante (x@(m,s):xs) e
   | x /= e    = x: (modifVotante xs e)
-  | s == 0    = xs
+  | s == 1    = xs
   | otherwise = (m,s-1):xs
 
 {-|Funcion que verifica si la fila creada se encuentra en la matriz.
@@ -142,4 +160,19 @@ genFila y (fila,_) = (genFilaN 0 y fila , 1)
     genFilaN x y (e0:e1:es)
       | x == y = e1:e0:es
       | otherwise = e0:genFilaN (x+1) y (e1:es)
+
+
+bfs2 :: Integer -> Integer -> [(Integer,String)] -> [([Integer],Integer)] -> [([([Integer],Integer)],Integer,Integer)]
+bfs2 cc cv c m = filter (\(s,_,_) -> fCondorcet cc cv s) $ generar cc 1 [(m,0,1)]
+
+
+fCondorcet2 :: Integer -> Integer -> ([([Integer] ,Integer)],Integer,Integer) -> [Integer]
+fCondorcet2 cc cv (m,_,_) = map (f2 cc) $ groupBy verifElem $ sort $ fst $ mapAccumL trans [] m
+
+f2 ::  Integer -> [(Integer,Integer,Integer)] -> Integer
+f2 _ [] = -1
+f2 p ((a,b,c):xs)
+  | c > p `div` 2 && xs ==[] = a
+  | c > p `div` 2 = f2 p xs
+  | otherwise = -1
 
