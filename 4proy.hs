@@ -1,4 +1,5 @@
-import Data.List
+import qualified Data.List as L
+import Data.Sequence
 import System.Environment
 
 {--
@@ -17,7 +18,7 @@ import System.Environment
  - m = matriz. 
  -}
 fCondorcet ::  Integer -> Integer -> [(Integer,Integer)] -> Bool
-fCondorcet cc cv m = foldl (\x y -> x || (f cv y)) False $ groupBy verifElem $ sort $ fst $ mapAccumL trans [] $ vectorToMatriz cc m
+fCondorcet cc cv m = foldl (\x y -> x || (f cv y)) False $ L.groupBy verifElem $ L.sort $ fst $ L.mapAccumL trans [] $ vectorToMatriz cc m
 {-|Funcion que verifica que todos las sumas de un las tuplas sean > n `div` 2
  -}
 f ::  Integer -> [(Integer,Integer,Integer)] -> Bool
@@ -32,7 +33,7 @@ f p ((a,b,c):xs)
  - m = matriz. 
  -}
 dfCondorcet ::  Integer -> Integer -> [(Integer,Integer)] -> Integer
-dfCondorcet cc cv m = fr $ groupBy verifElem $ sort $ fst $ mapAccumL trans [] $ vectorToMatriz cc m
+dfCondorcet cc cv m = fr $ L.groupBy verifElem $ L.sort $ fst $ L.mapAccumL trans [] $ vectorToMatriz cc m
   where
     fr :: [[(Integer,Integer,Integer)]] -> Integer
     fr [] = -1
@@ -54,7 +55,7 @@ trans  a (l,p)= (add l p a,())
  -}
 add :: [Integer] -> Integer -> [(Integer,Integer,Integer)] -> [(Integer,Integer,Integer)]
 add [y] p a = a
-add (x:y:xs) p a = add (y:xs) p (fst $ mapAccumL (fnd x p) a (y:xs))
+add (x:y:xs) p a = add (y:xs) p (fst $ L.mapAccumL (fnd x p) a (y:xs))
 {-|Funcion que recibe un numero (x), una lista de numeros (ls) y el peso (p)y la lista de tripletas q se a acumulado,
  -  y lo que hace es genera todas las tuplas de x con cada uno de lso numeros de la lista ls con el peso p.
  -  Si la tupla ya se encuentra el suma el peso (p) al peso anterior.
@@ -82,19 +83,21 @@ fnd x p (l@(x0,y0,p0):xs) y
  - nnv = nuevos nodos visitados al expandir x.
  - hijosx = los hijos de x.
  -}
-bfs :: Integer -> Integer -> Integer -> Integer -> [(String,Integer)] -> [[(Integer,Integer)]] -> [([(Integer,Integer)],Integer)] -> (String,Integer,Integer,Integer)
-bfs cc cv ne ng tu _ [] = ([],-1,-1,-1)
-bfs cc cv ne ng tu nv ((x,p):xs)
-  | fCondorcet cc cv x  = (camb tu $ dfCondorcet cc cv x,p,ne,ng)
-  | otherwise           = bfs cc cv (ne+1) (ng+nng) tu nnv (xs++hijosx)
+bfs :: Integer -> Integer -> Integer -> Integer -> [(String,Integer)] -> [[(Integer,Integer)]] -> Seq ([(Integer,Integer)],Integer) -> (String,Integer,Integer,Integer)
+bfs cc cv ne ng tu nv x
+  | Data.Sequence.null x= ([],-1,-1,-1)
+  | fCondorcet cc cv a  = (camb  tu (dfCondorcet cc cv a),p,ne,ng)
+  | otherwise           = bfs cc cv (ne+1) (ng+nng) tu nnv w2 
   where
-    ((nnv,nng),hijosx) = expandir (x,p) cc nv
+    w@(a,p)  = Data.Sequence.index x 0
+    w1 = Data.Sequence.drop 1 x
+    w2 = (><) w1 hijosx
+    ((nnv,nng),hijosx) = expandir w cc nv
     camb :: [(String,Integer)] -> Integer -> String
     camb []  _ = "no se encontro la representacion del integer"
     camb ((y,y1):xs) n
       | y1 == n = y
       | otherwise = camb xs n
-
 {-|
  - n = nodo.
  - m = matriz representada por lista de tuplas.
@@ -102,12 +105,12 @@ bfs cc cv ne ng tu nv ((x,p):xs)
  - cc = cantidad de candidatos.
  - nv = nodos visitados.
  -}
-expandir :: ([(Integer,Integer)], Integer) -> Integer -> [[(Integer,Integer)]] -> (( [[(Integer,Integer)]] ,Integer ) , [([(Integer,Integer)],Integer)] )
-expandir n@(m,pisos) cc nv = man $ mapAccumL (cambio cc n m) (nv,0) [0..cc-2]
+expandir :: ([(Integer,Integer)], Integer) -> Integer -> [[(Integer,Integer)]] -> (( [[(Integer,Integer)]] ,Integer ) , Seq ([(Integer,Integer)],Integer) )
+expandir n@(m,pisos) cc nv = man $ L.mapAccumL (cambio cc n m) (nv,0) [0..cc-2]
   where
     man (nnv,nm) = (nnv,w)
       where
-        !w = concat nm
+        !w = fromList $ concat nm
 
 
 {-|Funcion cambia el elemento que le dice ccam por el siguente en todas las filas,
@@ -120,7 +123,7 @@ expandir n@(m,pisos) cc nv = man $ mapAccumL (cambio cc n m) (nv,0) [0..cc-2]
  -}
 cambio :: Integer -> ([(Integer,Integer)], Integer) -> [(Integer,Integer)] -> 
   ([[(Integer,Integer)]],Integer) -> Integer -> (([[(Integer,Integer)]],Integer), [ ([(Integer,Integer)],Integer) ] )
-cambio cc (m,pisos) l (nv,ng) ccam = (\(nnv,nm) -> (nnv,limp nm) ) $ mapAccumL (genMatriz cc m ccam pisos) (nv,ng) l
+cambio cc (m,pisos) l (nv,ng) ccam = (\(nnv,nm) -> (nnv,limp nm) ) $ L.mapAccumL (genMatriz cc m ccam pisos) (nv,ng) l
   where
     limp :: [([(Integer,Integer)],Integer)] -> [([(Integer,Integer)],Integer)]
     limp [] = []
@@ -144,7 +147,7 @@ genMatriz :: Integer -> [(Integer,Integer)] -> Integer -> Integer -> ([[(Integer
 genMatriz cc nm ccam pisos (nv,ng) (col,p) =  fnd nv ng $ matrizToVector cc $ modifVotante (verifFila m $ genFila ccam e) (e,p)
   where
     m = vectorToMatriz cc nm
-    e = reverse $ unfolAcumm (cc+1) col
+    e = L.reverse $ unfolAcumm (cc+1) col
     {-| Funcion que busca la ocurrencia de la nueva matriz generada en los nodos visitados.
      - De no haber visitado previamente la matriz, se mete al principio de los nodos visitados.
      - nv = nodos visitados.
@@ -213,7 +216,7 @@ foldAcumm :: Integer -> (Integer,Integer) -> Integer -> (Integer,Integer)
 foldAcumm cc (a,e) n = (a+(n*(cc^e)),e-1)
 
 vectorToMatriz :: Integer -> [(Integer,Integer)] -> [([Integer],Integer)]
-vectorToMatriz cc = map (\(e,t) -> (reverse (unfolAcumm (cc+1) e),t)) 
+vectorToMatriz cc = map (\(e,t) -> (L.reverse (unfolAcumm (cc+1) e),t)) 
 
 
 unfolAcumm :: Integer -> Integer -> [Integer]
@@ -243,7 +246,7 @@ matriz :: [(String,Integer)] -> Int -> [String] -> [([Integer],Integer)] -> Inte
 matriz nam _ [] a b = (a,b)
 matriz nam n (x:xs) a b = matriz nam n seg ((camb nam prim,read x):a) (b+(read x))
  where
-    (prim,seg) = splitAt n xs
+    (prim,seg) = L.splitAt n xs
     camb :: [(String,Integer)] -> [String] -> [Integer]
     camb _ [] = []
     camb nam (x1:xs1) = r nam x1 : camb nam xs1
@@ -260,16 +263,14 @@ put (g,p,ne,ng)
 main = do
   a <-getArgs
   b <-readFile (last a)
-  let c = drop 1 $ concatMap words $ lines b
---  let cc = read $ head c
-  let nam = names 1 $  take (read $ head c) (tail c)
-  let d = drop (1 + (read $ head c)) (tail c)
+  let c = L.drop 1 $ concatMap words $ lines b
+  let nam = names 1 $  L.take (read $ head c) (tail c)
+  let d = L.drop (1 + (read $ head c)) (tail c)
   let (mat,cv) = matriz nam (read $ head c) d [] 0
- -- print $ matriz nam (read $ head c) d [] 0
   case (head a) of
     "-ida" -> print "ida"
     "-bfs" -> 
-      print $ bfs (read $ head c) cv 0 1 nam [matrizToVector (read $ head c) mat] [(matrizToVector (read $ head c) mat,0)]
+      print $ bfs (read $ head c) cv 0 1 nam [ matrizToVector (read $ head c) mat ]  $ singleton (matrizToVector (read $ head c) mat,0)
 --      let (m,ce,ne,ng) = bfs (read $ head c) cv 0 0 [matrizToVector (read $ head c) mat] [(matrizToVector (read $ head c) mat,0)]
 --    print m
 --    print "Num cambios elementales: "++ce
